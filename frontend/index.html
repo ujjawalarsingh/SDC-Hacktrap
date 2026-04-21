@@ -30,29 +30,67 @@
         </div>
       </header>
 
-      <section class="left panel">
+      <section class="top-section">
+        <section class="panel feed-panel">
+          <div class="section-head">
+            <h2>Live Attack Feed</h2>
+            <div class="action-group">
+              <span class="muted" id="feedCount">0 clusters</span>
+              <button id="viewLogsBtn" type="button">View All Logs</button>
+            </div>
+          </div>
+          <div id="feed" class="feed"></div>
+        </section>
+
+        <section class="panel map-panel">
+          <div class="section-head">
+            <h2>Global Attack Map</h2>
+            <span class="muted">Last 24 events</span>
+          </div>
+          <div id="map" class="map"></div>
+        </section>
+      </section>
+
+      <section class="panel intelligence-panel">
         <div class="section-head">
-          <h2>Live Attack Feed</h2>
-          <div class="action-group">
-            <span class="muted" id="feedCount">0 events</span>
-            <button id="viewLogsBtn" type="button">View All Logs</button>
+          <h2>Threat Intelligence</h2>
+          <span class="muted" id="lastUpdate">Updating...</span>
+        </div>
+        <p id="insightText" class="intelligence-insight">
+          Awaiting telemetry...
+        </p>
+
+        <div class="intelligence-grid">
+          <div class="intel-card">
+            <div class="label">Intent</div>
+            <div id="intelligenceIntent" class="value">Awaiting data</div>
+          </div>
+          <div class="intel-card">
+            <div class="label">Stage</div>
+            <div id="intelligenceStage" class="value">Initial</div>
+          </div>
+          <div class="intel-card">
+            <div class="label">Next Action</div>
+            <div id="intelligenceNextAction" class="value">Awaiting data</div>
+          </div>
+          <div class="intel-card">
+            <div class="label">Confidence</div>
+            <div id="intelligenceConfidence" class="value">Low</div>
           </div>
         </div>
-        <div id="feed" class="feed"></div>
-      </section>
 
-      <section class="center panel map-panel">
-        <div class="section-head">
-          <h2>Global Attack Map</h2>
-          <span class="muted">Last 50 events</span>
+        <div class="intelligence-summary">
+          <div class="summary-label">Primary Attacker</div>
+          <div id="intelligencePrimaryAttacker" class="summary-value">
+            No active attacker
+          </div>
         </div>
-        <div id="map" class="map"></div>
       </section>
 
-      <section class="right panel">
+      <section class="panel stats-panel">
         <div class="section-head">
           <h2>Threat Metrics</h2>
-          <span class="muted" id="lastUpdate">Updating...</span>
+          <span class="muted">Rolling 5 minute view</span>
         </div>
         <div class="stats-grid">
           <div class="stat-card">
@@ -73,41 +111,9 @@
           <h3>Confidence Mix</h3>
           <div id="confidenceBars" class="bars"></div>
         </div>
-
-        <div class="ai-panel">
-          <h3>AI Threat Engine</h3>
-          <p id="insightText">Awaiting telemetry...</p>
-        </div>
-
-        <div class="forecast-panel">
-          <h3>Threat Forecast</h3>
-          <div class="forecast-grid">
-            <div class="forecast-row">
-              <span class="forecast-label">Predicted Intent</span>
-              <span id="forecastIntent" class="forecast-value">Awaiting data</span>
-            </div>
-            <div class="forecast-row">
-              <span class="forecast-label">Likely Next Action</span>
-              <span id="forecastNextAction" class="forecast-value">Awaiting data</span>
-            </div>
-            <div class="forecast-row">
-              <span class="forecast-label">Escalation Level</span>
-              <span id="forecastStage" class="forecast-stage stage-initial">Initial</span>
-            </div>
-            <div class="forecast-row">
-              <span class="forecast-label">Intent Confidence</span>
-              <span id="forecastConfidence" class="forecast-value">Low</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="attackers-panel">
-          <h3>Top Attackers</h3>
-          <div id="topAttackers" class="attackers-list"></div>
-        </div>
       </section>
 
-      <section class="bottom panel">
+      <section class="panel logs-panel">
         <div class="section-head">
           <h2>Threat Logs</h2>
           <div class="controls">

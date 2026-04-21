@@ -4,8 +4,8 @@ import { io } from "socket.io-client";
 
 const API_BASE = "http://localhost:3001";
 const STATE_LIMIT = 200;
-const FEED_LIMIT = 40;
-const MAP_LIMIT = 28;
+const FEED_LIMIT = 12;
+const MAP_LIMIT = 24;
 const TABLE_LIMIT = STATE_LIMIT;
 const RENDER_DEBOUNCE_MS = 180;
 const MAP_REFRESH_MS = 2500;
@@ -30,11 +30,13 @@ const elements = {
   lastUpdate: document.getElementById("lastUpdate"),
   map: document.getElementById("map"),
   threatLevelBadge: document.getElementById("threatLevelBadge"),
-  topAttackers: document.getElementById("topAttackers"),
-  forecastIntent: document.getElementById("forecastIntent"),
-  forecastNextAction: document.getElementById("forecastNextAction"),
-  forecastStage: document.getElementById("forecastStage"),
-  forecastConfidence: document.getElementById("forecastConfidence"),
+  intelligenceIntent: document.getElementById("intelligenceIntent"),
+  intelligenceStage: document.getElementById("intelligenceStage"),
+  intelligenceNextAction: document.getElementById("intelligenceNextAction"),
+  intelligenceConfidence: document.getElementById("intelligenceConfidence"),
+  intelligencePrimaryAttacker: document.getElementById(
+    "intelligencePrimaryAttacker",
+  ),
 };
 
 const countryCoords = {
@@ -170,6 +172,11 @@ function clearState() {
   elements.confidenceBars.innerHTML = "";
   elements.insightText.textContent = "System Ready - Click Start";
   elements.lastUpdate.textContent = "Paused";
+  elements.intelligenceIntent.textContent = "Awaiting data";
+  elements.intelligenceStage.textContent = "Initial";
+  elements.intelligenceNextAction.textContent = "Awaiting data";
+  elements.intelligenceConfidence.textContent = "Low";
+  elements.intelligencePrimaryAttacker.textContent = "No active attacker";
   state.insightLines = ["System Ready - Click Start"];
   state.forecast = {
     intent: "Awaiting data",
@@ -177,7 +184,6 @@ function clearState() {
     stage: "Initial",
     intentConfidence: "Low",
   };
-  renderForecast();
   updateMap(true);
 }
 
@@ -303,19 +309,6 @@ function buildInsights(fiveMinuteEvents, topCountries) {
   }
 
   // Behavioral intelligence insights
-  if (state.topAttackers.length > 0) {
-    const topAttacker = state.topAttackers[0];
-    if (topAttacker.activity_pattern === "persistent") {
-      lines.push(
-        `Persistent threat detected from ${topAttacker.ip}: ${topAttacker.total_events} events (${topAttacker.dominant_attack_type}).`,
-      );
-    } else if (topAttacker.activity_pattern === "burst") {
-      lines.push(
-        `Burst attack detected from ${topAttacker.ip}: rapid escalation observed.`,
-      );
-    }
-  }
-
   if (topCountries.length > 0) {
     lines.push(`Top sources: ${topCountries.join(", ")}.`);
   }
@@ -344,9 +337,41 @@ function renderFeed() {
   const latest = [...state.events]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .slice(0, FEED_LIMIT);
+  const grouped = [];
+  const byIp = new Map();
 
-  elements.feedCount.textContent = `${latest.length} live events`;
-  if (latest.length === 0) {
+  for (const event of latest) {
+    const key = event.ip;
+    const existing = byIp.get(key);
+    if (!existing) {
+      byIp.set(key, {
+        ip: key,
+        latest: event,
+        count: 1,
+        maxScore: scoreFor(event),
+        labels: new Map([[labelFor(event), 1]]),
+      });
+      continue;
+    }
+
+    existing.count += 1;
+    existing.maxScore = Math.max(existing.maxScore, scoreFor(event));
+    existing.labels.set(
+      labelFor(event),
+      (existing.labels.get(labelFor(event)) || 0) + 1,
+    );
+    if (new Date(event.timestamp) > new Date(existing.latest.timestamp)) {
+      existing.latest = event;
+    }
+  }
+
+  grouped.push(...byIp.values());
+  grouped.sort(
+    (a, b) => new Date(b.latest.timestamp) - new Date(a.latest.timestamp),
+  );
+
+  elements.feedCount.textContent = `${grouped.length} clusters`;
+  if (grouped.length === 0) {
     if (state.isRunning) {
       elements.feed.innerHTML = `
       <div class="empty-state">
@@ -364,20 +389,28 @@ function renderFeed() {
     return;
   }
 
-  elements.feed.innerHTML = latest
-    .map((event) => {
-      const score = scoreFor(event);
-      const cls = riskClass(score);
-      const highlight = cls === "high" ? " glow" : "";
+  elements.feed.innerHTML = grouped
+    .map((group) => {
+      const score = group.maxScore;
+      const cls = score >= 85 ? "high" : "neutral";
+      const labelEntries = [...group.labels.entries()].sort(
+        (a, b) => b[1] - a[1],
+      );
+      const dominantLabel = labelEntries[0]?.[0] || labelFor(group.latest);
+      const countText =
+        group.count > 1 ? `×${group.count} attempts` : "single attempt";
       return `
-        <article class="feed-item ${cls}${highlight}">
+        <article class="feed-item ${cls}">
           <div class="row top">
-            <strong>${event.ip}</strong>
-            <span class="score ${cls}">${score}</span>
+            <strong>${group.ip}</strong>
+            <span class="score ${score >= 85 ? "high" : "low"}">${score}</span>
           </div>
           <div class="row mid">
-            <span>${event.country || "Unknown"}</span>
-            <span>${labelFor(event)}</span>
+            <span>${dominantLabel}</span>
+            <span>${countText}</span>
+          </div>
+          <div class="feed-meta">
+            ${group.latest.country || "Unknown"} · ${group.latest.activity || group.latest.attack_type}
           </div>
         </article>`;
     })
@@ -496,12 +529,6 @@ function renderInsights() {
   elements.insightText.textContent = line;
 }
 
-function stageClass(stage) {
-  if (stage === "Critical") return "stage-critical";
-  if (stage === "Escalating") return "stage-escalating";
-  return "stage-initial";
-}
-
 function updateForecastFromEvents() {
   const latestByTime = [...state.events].sort(
     (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
@@ -526,12 +553,29 @@ function updateForecastFromEvents() {
   };
 }
 
-function renderForecast() {
-  elements.forecastIntent.textContent = state.forecast.intent;
-  elements.forecastNextAction.textContent = state.forecast.predictedNextAction;
-  elements.forecastConfidence.textContent = state.forecast.intentConfidence;
-  elements.forecastStage.textContent = state.forecast.stage;
-  elements.forecastStage.className = `forecast-stage ${stageClass(state.forecast.stage)}`;
+function stageClass(stage) {
+  if (stage === "Critical") return "stage-critical";
+  if (stage === "Escalating") return "stage-escalating";
+  return "stage-initial";
+}
+
+function renderIntelligencePanel() {
+  elements.intelligenceIntent.textContent = state.forecast.intent;
+  elements.intelligenceNextAction.textContent =
+    state.forecast.predictedNextAction;
+  elements.intelligenceConfidence.textContent = state.forecast.intentConfidence;
+  elements.intelligenceStage.textContent = state.forecast.stage;
+  elements.intelligenceStage.className = `value stage-badge ${stageClass(
+    state.forecast.stage,
+  )}`;
+
+  const primaryAttacker = state.topAttackers[0];
+  if (!primaryAttacker) {
+    elements.intelligencePrimaryAttacker.textContent = "No active attacker";
+    return;
+  }
+
+  elements.intelligencePrimaryAttacker.textContent = `${primaryAttacker.ip} · ${primaryAttacker.dominant_attack_type} · ${primaryAttacker.activity_pattern} · ${primaryAttacker.total_events} events`;
 }
 
 function renderFrame() {
@@ -539,7 +583,7 @@ function renderFrame() {
   renderFeed();
   renderTable();
   updateForecastFromEvents();
-  renderForecast();
+  renderIntelligencePanel();
   updateStats();
   renderInsights();
 }
@@ -597,7 +641,7 @@ async function fetchSystemStatus() {
     state.systemThreatLevel = data.threat_level || "Low";
     state.topAttackers = data.top_attackers || [];
     updateThreatLevel();
-    renderTopAttackers();
+    renderIntelligencePanel();
   } catch (_error) {
     // ignore errors
   }
@@ -608,31 +652,6 @@ function updateThreatLevel() {
   const level = state.systemThreatLevel;
   badge.textContent = `Threat Level: ${level.toUpperCase()}`;
   badge.className = `threat-badge threat-${level.toLowerCase()}`;
-}
-
-function renderTopAttackers() {
-  const attackers = state.topAttackers.slice(0, 3);
-  if (attackers.length === 0) {
-    elements.topAttackers.innerHTML =
-      '<div class="empty-copy">No active attackers</div>';
-    return;
-  }
-
-  elements.topAttackers.innerHTML = attackers
-    .map(
-      (attacker) =>
-        `<div class="attacker-card">
-          <div class="attacker-ip">${attacker.ip}</div>
-          <div class="attacker-type">${attacker.dominant_attack_type}</div>
-          <div class="attacker-risk risk-${attacker.threat_level.toLowerCase()}">
-            ${attacker.threat_level} (${attacker.average_risk_score}/100)
-          </div>
-          <div class="attacker-meta">
-            ${attacker.total_events} events | ${attacker.activity_pattern}
-          </div>
-        </div>`,
-    )
-    .join("");
 }
 
 function processIncoming(event) {
@@ -672,7 +691,8 @@ function startRunning() {
 function pauseRunning() {
   if (!state.isRunning) return;
   activateRunningState(false);
-  elements.insightText.textContent = "Paused - click Start to resume live telemetry.";
+  elements.insightText.textContent =
+    "Paused - click Start to resume live telemetry.";
 }
 
 function resetSystem() {
@@ -684,7 +704,7 @@ elements.startBtn.addEventListener("click", startRunning);
 elements.pauseBtn.addEventListener("click", pauseRunning);
 elements.resetBtn.addEventListener("click", resetSystem);
 elements.viewLogsBtn.addEventListener("click", () => {
-  const logsPanel = document.querySelector(".bottom");
+  const logsPanel = document.querySelector(".logs-panel");
   const tableWrap = document.querySelector(".table-wrap");
   logsPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
   if (tableWrap) {
@@ -717,4 +737,4 @@ state.statusTimer = setInterval(() => {
 }, 4000);
 state.mapTimer = setInterval(() => {
   if (state.isRunning) updateMap();
-}, MAP_REFRESH_MS);
+}, 3000);

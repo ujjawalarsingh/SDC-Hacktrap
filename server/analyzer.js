@@ -105,14 +105,25 @@ function detectIntent(event, recentEvents, sessionEvents) {
       isCommandExecution(candidateCommand),
   );
   const hasScanPattern =
-    event.attack_type === "Scan" || command.includes("nmap") || command.includes("nc ");
+    event.attack_type === "Scan" ||
+    command.includes("nmap") ||
+    command.includes("nc ");
 
   let intent = "Suspicious Probing";
   let score = 48;
 
-  if (hasWgetOrCurl || hasChmod || sessionCommands.some((candidate) => candidate.includes("chmod"))) {
+  if (
+    hasWgetOrCurl ||
+    hasChmod ||
+    sessionCommands.some((candidate) => candidate.includes("chmod"))
+  ) {
     intent = "Malware Deployment";
-    score = hasWgetOrCurl && (hasChmod || sessionCommands.some((candidate) => candidate.includes("chmod"))) ? 90 : 78;
+    score =
+      hasWgetOrCurl &&
+      (hasChmod ||
+        sessionCommands.some((candidate) => candidate.includes("chmod")))
+        ? 90
+        : 78;
   } else if (hasBruteForceInSession && hasLoginOrCommandInSession) {
     intent = "Account Takeover";
     score = 82;
@@ -143,7 +154,10 @@ function detectStage(event, sessionEvents) {
     isCommandExecution(command),
   );
   const hasMalware = sessionCommands.some(
-    (command) => command.includes("wget") || command.includes("curl") || command.includes("chmod"),
+    (command) =>
+      command.includes("wget") ||
+      command.includes("curl") ||
+      command.includes("chmod"),
   );
 
   if (hasBruteForce && hasCommandExecution && hasMalware) {
