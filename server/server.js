@@ -21,13 +21,17 @@ const io = new Server(server, {
 });
 
 // Start generator with profile updater
-startEventGenerator(events, (event) => {
-  try {
-    io.emit("new_event", event);
-  } catch (error) {
-    console.error("Socket emission error:", error.message);
-  }
-}, updateProfile);
+startEventGenerator(
+  events,
+  (event) => {
+    try {
+      io.emit("new_event", event);
+    } catch (error) {
+      console.error("Socket emission error:", error.message);
+    }
+  },
+  updateProfile,
+);
 
 app.use(cors());
 
@@ -39,23 +43,23 @@ io.on("connection", (socket) => {
 function computeSystemThreatLevel() {
   const now = Date.now();
   const tenSecondsAgo = now - 10000;
-  
+
   const highRiskEvents = events.filter(
-    (event) => 
+    (event) =>
       new Date(event.timestamp).getTime() > tenSecondsAgo &&
-      (event.analysis?.risk_score || event.risk_score || 0) >= 85
+      (event.analysis?.risk_score || event.risk_score || 0) >= 85,
   );
 
   if (highRiskEvents.length >= 5) return "High";
-  
+
   const mediumRiskEvents = events.filter(
-    (event) => 
+    (event) =>
       new Date(event.timestamp).getTime() > tenSecondsAgo &&
-      (event.analysis?.risk_score || event.risk_score || 0) >= 65
+      (event.analysis?.risk_score || event.risk_score || 0) >= 65,
   );
 
   if (mediumRiskEvents.length >= 3) return "Medium";
-  
+
   return "Low";
 }
 
@@ -106,7 +110,10 @@ app.get("/api/system-status", (req, res) => {
 
 // NEW: Get top attackers
 app.get("/api/attackers", (req, res) => {
-  const limit = Math.min(Math.max(1, Number.parseInt(req.query.limit || 10)), 50);
+  const limit = Math.min(
+    Math.max(1, Number.parseInt(req.query.limit || 10)),
+    50,
+  );
   const attackers = getTopAttackers(limit);
   res.json({ attackers });
 });

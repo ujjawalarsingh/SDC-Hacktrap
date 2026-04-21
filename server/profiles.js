@@ -29,8 +29,12 @@ function updateProfile(event) {
   profile.last_seen = event.timestamp;
   profile.total_events += 1;
 
-  const threatLabel = event.analysis?.threat_label || event.attack_type || "Unknown";
-  profile.attack_types.set(threatLabel, (profile.attack_types.get(threatLabel) || 0) + 1);
+  const threatLabel =
+    event.analysis?.threat_label || event.attack_type || "Unknown";
+  profile.attack_types.set(
+    threatLabel,
+    (profile.attack_types.get(threatLabel) || 0) + 1,
+  );
 
   const risk = event.analysis?.risk_score || event.risk_score || 0;
   profile.risk_scores.push(risk);

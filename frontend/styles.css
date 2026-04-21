@@ -181,18 +181,34 @@ button:disabled {
 
 .left {
   grid-area: left;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.75rem;
 }
 
 .center {
   grid-area: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.75rem;
 }
 
 .right {
   grid-area: right;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.75rem;
 }
 
 .bottom {
   grid-area: bottom;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.75rem;
 }
 
 .section-head {
@@ -221,7 +237,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  overflow: hidden;
+  overflow: auto;
+  min-height: 0;
 }
 
 .feed-item {
@@ -540,6 +557,75 @@ tbody tr.low {
   border: 1px solid rgb(255 255 255 / 4%);
   padding: 0.6rem;
   margin-top: 0.55rem;
+}
+
+.forecast-panel {
+  background: var(--panel-3);
+  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 4%);
+  padding: 0.6rem;
+  margin-top: 0.55rem;
+}
+
+.forecast-panel h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #dbe8ff;
+}
+
+.forecast-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.forecast-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.1rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 6%);
+  background: rgb(255 255 255 / 2%);
+}
+
+.forecast-label {
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.forecast-value {
+  color: #dbe8ff;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.forecast-stage {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.18rem 0.34rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.forecast-stage.stage-initial {
+  color: #a8f0d9;
+  background: rgb(78 208 138 / 12%);
+}
+
+.forecast-stage.stage-escalating {
+  color: #ffe8a8;
+  background: rgb(241 200 76 / 14%);
+}
+
+.forecast-stage.stage-critical {
+  color: #ffb4b6;
+  background: rgb(255 77 79 / 16%);
+  box-shadow: 0 0 12px rgb(255 77 79 / 18%);
 }
 
 .attackers-panel h3 {

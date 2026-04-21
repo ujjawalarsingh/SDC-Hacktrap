@@ -79,6 +79,28 @@
           <p id="insightText">Awaiting telemetry...</p>
         </div>
 
+        <div class="forecast-panel">
+          <h3>Threat Forecast</h3>
+          <div class="forecast-grid">
+            <div class="forecast-row">
+              <span class="forecast-label">Predicted Intent</span>
+              <span id="forecastIntent" class="forecast-value">Awaiting data</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">Likely Next Action</span>
+              <span id="forecastNextAction" class="forecast-value">Awaiting data</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">Escalation Level</span>
+              <span id="forecastStage" class="forecast-stage stage-initial">Initial</span>
+            </div>
+            <div class="forecast-row">
+              <span class="forecast-label">Intent Confidence</span>
+              <span id="forecastConfidence" class="forecast-value">Low</span>
+            </div>
+          </div>
+        </div>
+
         <div class="attackers-panel">
           <h3>Top Attackers</h3>
           <div id="topAttackers" class="attackers-list"></div>

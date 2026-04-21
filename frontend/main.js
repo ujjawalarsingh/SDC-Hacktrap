@@ -4,9 +4,9 @@ import { io } from "socket.io-client";
 
 const API_BASE = "http://localhost:3001";
 const STATE_LIMIT = 200;
-const FEED_LIMIT = 12;
+const FEED_LIMIT = 40;
 const MAP_LIMIT = 28;
-const TABLE_LIMIT = 80;
+const TABLE_LIMIT = STATE_LIMIT;
 const RENDER_DEBOUNCE_MS = 180;
 const MAP_REFRESH_MS = 2500;
 const POLL_MS = 5000;
@@ -31,6 +31,10 @@ const elements = {
   map: document.getElementById("map"),
   threatLevelBadge: document.getElementById("threatLevelBadge"),
   topAttackers: document.getElementById("topAttackers"),
+  forecastIntent: document.getElementById("forecastIntent"),
+  forecastNextAction: document.getElementById("forecastNextAction"),
+  forecastStage: document.getElementById("forecastStage"),
+  forecastConfidence: document.getElementById("forecastConfidence"),
 };
 
 const countryCoords = {
@@ -85,6 +89,12 @@ const state = {
   insightLines: ["System Ready - Click Start"],
   systemThreatLevel: "Low",
   topAttackers: [],
+  forecast: {
+    intent: "Awaiting data",
+    predictedNextAction: "Awaiting data",
+    stage: "Initial",
+    intentConfidence: "Low",
+  },
 };
 
 function scoreFor(event) {
@@ -161,6 +171,13 @@ function clearState() {
   elements.insightText.textContent = "System Ready - Click Start";
   elements.lastUpdate.textContent = "Paused";
   state.insightLines = ["System Ready - Click Start"];
+  state.forecast = {
+    intent: "Awaiting data",
+    predictedNextAction: "Awaiting data",
+    stage: "Initial",
+    intentConfidence: "Low",
+  };
+  renderForecast();
   updateMap(true);
 }
 
@@ -303,6 +320,21 @@ function buildInsights(fiveMinuteEvents, topCountries) {
     lines.push(`Top sources: ${topCountries.join(", ")}.`);
   }
 
+  if (state.forecast.intent === "Account Takeover") {
+    lines.push("Attacker likely attempting system takeover.");
+  }
+
+  if (
+    state.forecast.predictedNextAction.toLowerCase().includes("execution") ||
+    state.forecast.intent === "Malware Deployment"
+  ) {
+    lines.push("Malware execution expected next.");
+  }
+
+  if (state.forecast.stage === "Critical") {
+    lines.push("Critical escalation detected in active session.");
+  }
+
   const threatMsg = `Threat Level: ${state.systemThreatLevel.toUpperCase()}`;
   lines.push(`AI Engine Active. ${threatMsg}`);
   return lines;
@@ -310,15 +342,20 @@ function buildInsights(fiveMinuteEvents, topCountries) {
 
 function renderFeed() {
   const latest = [...state.events]
-    .sort(
-      (a, b) =>
-        scoreFor(b) - scoreFor(a) ||
-        new Date(b.timestamp) - new Date(a.timestamp),
-    )
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .slice(0, FEED_LIMIT);
 
-  elements.feedCount.textContent = `${latest.length} events`;
+  elements.feedCount.textContent = `${latest.length} live events`;
   if (latest.length === 0) {
+    if (state.isRunning) {
+      elements.feed.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-title">Connecting Live Telemetry</div>
+        <div class="empty-copy">Syncing events and awaiting the next threat signal.</div>
+      </div>`;
+      return;
+    }
+
     elements.feed.innerHTML = `
       <div class="empty-state">
         <div class="empty-title">System Ready - Click Start</div>
@@ -459,10 +496,50 @@ function renderInsights() {
   elements.insightText.textContent = line;
 }
 
+function stageClass(stage) {
+  if (stage === "Critical") return "stage-critical";
+  if (stage === "Escalating") return "stage-escalating";
+  return "stage-initial";
+}
+
+function updateForecastFromEvents() {
+  const latestByTime = [...state.events].sort(
+    (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+  );
+  const latest = latestByTime.find(
+    (event) =>
+      event.analysis?.intent ||
+      event.analysis?.predicted_next_action ||
+      event.analysis?.stage,
+  );
+
+  if (!latest) {
+    return;
+  }
+
+  state.forecast = {
+    intent: latest.analysis?.intent || "Suspicious Probing",
+    predictedNextAction:
+      latest.analysis?.predicted_next_action || "Likely lateral probing",
+    stage: latest.analysis?.stage || "Initial",
+    intentConfidence: latest.analysis?.intent_confidence || "Low",
+  };
+}
+
+function renderForecast() {
+  elements.forecastIntent.textContent = state.forecast.intent;
+  elements.forecastNextAction.textContent = state.forecast.predictedNextAction;
+  elements.forecastConfidence.textContent = state.forecast.intentConfidence;
+  elements.forecastStage.textContent = state.forecast.stage;
+  elements.forecastStage.className = `forecast-stage ${stageClass(state.forecast.stage)}`;
+}
+
 function renderFrame() {
   state.renderQueued = false;
   renderFeed();
   renderTable();
+  updateForecastFromEvents();
+  renderForecast();
   updateStats();
   renderInsights();
 }
@@ -536,7 +613,8 @@ function updateThreatLevel() {
 function renderTopAttackers() {
   const attackers = state.topAttackers.slice(0, 3);
   if (attackers.length === 0) {
-    elements.topAttackers.innerHTML = '<div class="empty-copy">No active attackers</div>';
+    elements.topAttackers.innerHTML =
+      '<div class="empty-copy">No active attackers</div>';
     return;
   }
 
@@ -594,7 +672,7 @@ function startRunning() {
 function pauseRunning() {
   if (!state.isRunning) return;
   activateRunningState(false);
-  elements.insightText.textContent = "Paused - connections remain open.";
+  elements.insightText.textContent = "Paused - click Start to resume live telemetry.";
 }
 
 function resetSystem() {
@@ -606,9 +684,13 @@ elements.startBtn.addEventListener("click", startRunning);
 elements.pauseBtn.addEventListener("click", pauseRunning);
 elements.resetBtn.addEventListener("click", resetSystem);
 elements.viewLogsBtn.addEventListener("click", () => {
-  document
-    .querySelector(".bottom")
-    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const logsPanel = document.querySelector(".bottom");
+  const tableWrap = document.querySelector(".table-wrap");
+  logsPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (tableWrap) {
+    tableWrap.scrollTop = 0;
+  }
+  elements.searchInput?.focus();
 });
 elements.searchInput.addEventListener("input", queueRender);
 elements.sortBtn.addEventListener("click", () => {
