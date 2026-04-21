@@ -3,16 +3,96 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Honeypot Dashboard (Local)</title>
+    <title>HackTrap AI Threat Monitor</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="layout">
-      <h1>Honeypot Dashboard</h1>
-      <p class="subtitle">Local minimal mode (no external ingestion)</p>
-      <section class="panel">
-        <h2>Events</h2>
-        <pre id="events">Loading...</pre>
+    <main class="dashboard">
+      <header class="topbar panel">
+        <div>
+          <h1>HackTrap AI Threat Monitor</h1>
+          <p class="subtitle">Real-Time Threat Intelligence System</p>
+        </div>
+        <div class="status-wrap">
+          <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+          <div class="status-grid">
+            <span class="tag">AI Engine Active</span>
+            <span class="tag warning">Threat Level: Elevated</span>
+            <span class="tag">Dark Web Monitoring Enabled</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="left panel">
+        <div class="section-head">
+          <h2>Live Attack Feed</h2>
+          <span class="muted" id="feedCount">0 events</span>
+        </div>
+        <div id="feed" class="feed"></div>
+      </section>
+
+      <section class="center panel map-panel">
+        <div class="section-head">
+          <h2>Global Attack Map</h2>
+          <span class="muted">Last 50 events</span>
+        </div>
+        <div id="map" class="map"></div>
+      </section>
+
+      <section class="right panel">
+        <div class="section-head">
+          <h2>Threat Metrics</h2>
+          <span class="muted" id="lastUpdate">Updating...</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="label">Attacks (5m)</div>
+            <div id="total5m" class="value">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Top Country</div>
+            <div id="topCountry" class="value">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Top Attack Type</div>
+            <div id="topType" class="value">-</div>
+          </div>
+        </div>
+
+        <div class="bars-wrap">
+          <h3>Confidence Mix</h3>
+          <div id="confidenceBars" class="bars"></div>
+        </div>
+
+        <div class="insights panel-sub">
+          <h3>AI Threat Engine</h3>
+          <p id="insightText">Awaiting telemetry...</p>
+        </div>
+      </section>
+
+      <section class="bottom panel">
+        <div class="section-head">
+          <h2>Threat Logs</h2>
+          <div class="controls">
+            <input id="searchInput" type="text" placeholder="Search IP, country, command, label" />
+            <button id="sortBtn" type="button">Sort by Risk: Desc</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>IP</th>
+                <th>Country</th>
+                <th>Threat Label</th>
+                <th>Command</th>
+                <th>Risk Score</th>
+              </tr>
+            </thead>
+            <tbody id="logsBody"></tbody>
+          </table>
+        </div>
       </section>
     </main>
     <script type="module" src="./main.js"></script>
