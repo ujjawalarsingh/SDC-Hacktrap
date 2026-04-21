@@ -2,7 +2,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { io } from "socket.io-client";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001";
 const STATE_LIMIT = 200;
 const FEED_LIMIT = 12;
 const MAP_LIMIT = 24;
@@ -737,4 +737,4 @@ state.statusTimer = setInterval(() => {
 }, 4000);
 state.mapTimer = setInterval(() => {
   if (state.isRunning) updateMap();
-}, 3000);
+}, MAP_REFRESH_MS);
