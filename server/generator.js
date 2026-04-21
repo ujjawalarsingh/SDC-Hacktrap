@@ -86,28 +86,85 @@ function computeRiskScore(attackType, command) {
   return Math.min(score, 100);
 }
 
-function createEvent() {
-  const country = pickOne(countries);
-  const cityOptions = citiesByCountry[country] || [];
-  const attackType = pickOne(attackTypes);
-  const command = pickOne(commandsByAttackType[attackType]);
+// Session state for behavioral patterns
+let sessionState = {
+  currentIP: randomIPv4(),
+  currentCountry: pickOne(countries),
+  sessionID: randomUUID(),
+  eventsInSession: 0,
+  sessionMaxEvents: randomInt(5, 15),
+  sessionPhase: 0, // 0: scan, 1: brute force, 2: login success, 3: command, 4: malware
+};
 
-  return {
+function nextSessionPhase() {
+  sessionState.sessionPhase = (sessionState.sessionPhase + 1) % 5;
+}
+
+function generateCommandForPhase(phase) {
+  const phases = {
+    0: () => "nmap -sV target.local", // Scan
+    1: () => pickOne(commandsByAttackType["Brute Force"]), // Brute Force
+    2: () => "cd /home", // Post-login
+    3: () => pickOne(["ls -la", "pwd", "whoami", "cat /etc/passwd"]), // Command
+    4: () => pickOne(commandsByAttackType["Malware"]), // Malware
+  };
+  return (phases[phase] || (() => "ls"))();
+}
+
+function generateAttackTypeForPhase(phase) {
+  const phases = {
+    0: "Scan",
+    1: "Brute Force",
+    2: "Brute Force",
+    3: "Scan",
+    4: "Malware",
+  };
+  return phases[phase] || "Suspicious Activity";
+}
+
+function createSessionEvent() {
+  // Generate event within current session
+  const country = sessionState.currentCountry;
+  const cityOptions = citiesByCountry[country] || [];
+  const attackType = generateAttackTypeForPhase(sessionState.sessionPhase);
+  const command = generateCommandForPhase(sessionState.sessionPhase);
+
+  const event = {
     id: randomUUID(),
     timestamp: new Date().toISOString(),
-    ip: randomIPv4(),
+    ip: sessionState.currentIP,
     country,
     city: cityOptions.length > 0 ? pickOne(cityOptions) : undefined,
     attack_type: attackType,
     username: pickOne(usernames),
     password: pickOne(passwords),
     command,
-    port: pickOne(ports),
+    port: 22,
     risk_score: computeRiskScore(attackType, command),
+    session_id: sessionState.sessionID,
   };
+
+  sessionState.eventsInSession += 1;
+  nextSessionPhase();
+
+  // Check if session should end
+  if (sessionState.eventsInSession >= sessionState.sessionMaxEvents) {
+    sessionState.currentIP = randomIPv4();
+    sessionState.currentCountry = pickOne(countries);
+    sessionState.sessionID = randomUUID();
+    sessionState.eventsInSession = 0;
+    sessionState.sessionMaxEvents = randomInt(5, 15);
+    sessionState.sessionPhase = 0;
+  }
+
+  return event;
 }
 
-function startEventGenerator(eventsArray, onEvent) {
+function createEvent() {
+  return createSessionEvent();
+}
+
+function startEventGenerator(eventsArray, onEvent, profileUpdater) {
   function scheduleNext() {
     const event = createEvent();
     const recentEvents = eventsArray.slice(-49);
@@ -116,6 +173,17 @@ function startEventGenerator(eventsArray, onEvent) {
       analysis: analyzeEvent(event, [...recentEvents, event]),
     };
     eventsArray.push(enrichedEvent);
+
+    // Update profile if callback provided
+    if (typeof profileUpdater === "function") {
+      const profile = profileUpdater(enrichedEvent);
+      enrichedEvent.profile_id = profile.profile_id;
+      enrichedEvent.profile_summary = {
+        dominant_attack_type: profile.dominant_attack_type,
+        activity_pattern: profile.activity_pattern,
+        threat_level: profile.threat_level,
+      };
+    }
 
     if (typeof onEvent === "function") {
       onEvent(enrichedEvent);

@@ -29,6 +29,8 @@ const elements = {
   insightText: document.getElementById("insightText"),
   lastUpdate: document.getElementById("lastUpdate"),
   map: document.getElementById("map"),
+  threatLevelBadge: document.getElementById("threatLevelBadge"),
+  topAttackers: document.getElementById("topAttackers"),
 };
 
 const countryCoords = {
@@ -75,11 +77,14 @@ const state = {
   statsTimer: null,
   insightTimer: null,
   mapTimer: null,
+  statusTimer: null,
   socket: null,
   lastSeenTimestamp: null,
   markers: [],
   markerPool: [],
   insightLines: ["System Ready - Click Start"],
+  systemThreatLevel: "Low",
+  topAttackers: [],
 };
 
 function scoreFor(event) {
@@ -280,11 +285,26 @@ function buildInsights(fiveMinuteEvents, topCountries) {
     );
   }
 
+  // Behavioral intelligence insights
+  if (state.topAttackers.length > 0) {
+    const topAttacker = state.topAttackers[0];
+    if (topAttacker.activity_pattern === "persistent") {
+      lines.push(
+        `Persistent threat detected from ${topAttacker.ip}: ${topAttacker.total_events} events (${topAttacker.dominant_attack_type}).`,
+      );
+    } else if (topAttacker.activity_pattern === "burst") {
+      lines.push(
+        `Burst attack detected from ${topAttacker.ip}: rapid escalation observed.`,
+      );
+    }
+  }
+
   if (topCountries.length > 0) {
     lines.push(`Top sources: ${topCountries.join(", ")}.`);
   }
 
-  lines.push("AI Engine Active. Threat Level: Elevated.");
+  const threatMsg = `Threat Level: ${state.systemThreatLevel.toUpperCase()}`;
+  lines.push(`AI Engine Active. ${threatMsg}`);
   return lines;
 }
 
@@ -491,6 +511,52 @@ async function syncSince() {
   }
 }
 
+async function fetchSystemStatus() {
+  if (!state.isRunning) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/system-status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.systemThreatLevel = data.threat_level || "Low";
+    state.topAttackers = data.top_attackers || [];
+    updateThreatLevel();
+    renderTopAttackers();
+  } catch (_error) {
+    // ignore errors
+  }
+}
+
+function updateThreatLevel() {
+  const badge = elements.threatLevelBadge;
+  const level = state.systemThreatLevel;
+  badge.textContent = `Threat Level: ${level.toUpperCase()}`;
+  badge.className = `threat-badge threat-${level.toLowerCase()}`;
+}
+
+function renderTopAttackers() {
+  const attackers = state.topAttackers.slice(0, 3);
+  if (attackers.length === 0) {
+    elements.topAttackers.innerHTML = '<div class="empty-copy">No active attackers</div>';
+    return;
+  }
+
+  elements.topAttackers.innerHTML = attackers
+    .map(
+      (attacker) =>
+        `<div class="attacker-card">
+          <div class="attacker-ip">${attacker.ip}</div>
+          <div class="attacker-type">${attacker.dominant_attack_type}</div>
+          <div class="attacker-risk risk-${attacker.threat_level.toLowerCase()}">
+            ${attacker.threat_level} (${attacker.average_risk_score}/100)
+          </div>
+          <div class="attacker-meta">
+            ${attacker.total_events} events | ${attacker.activity_pattern}
+          </div>
+        </div>`,
+    )
+    .join("");
+}
+
 function processIncoming(event) {
   if (!state.isRunning) return;
   if (addEvent(event)) {
@@ -521,6 +587,7 @@ function startRunning() {
     queueRender();
     queueMapUpdate();
   });
+  fetchSystemStatus();
   syncSince();
 }
 
@@ -563,6 +630,9 @@ state.statsTimer = setInterval(() => {
 state.insightTimer = setInterval(() => {
   if (state.isRunning) renderInsights();
 }, 3500);
+state.statusTimer = setInterval(() => {
+  if (state.isRunning) fetchSystemStatus();
+}, 4000);
 state.mapTimer = setInterval(() => {
   if (state.isRunning) updateMap();
 }, MAP_REFRESH_MS);

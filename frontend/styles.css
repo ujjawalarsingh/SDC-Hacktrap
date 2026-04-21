@@ -501,6 +501,115 @@ tbody tr.low {
   box-shadow: 0 10px 24px rgb(0 0 0 / 35%);
 }
 
+.threat-badge {
+  padding: 0.33rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid;
+  background: rgb(255 255 255 / 3%);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  font-weight: 600;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+
+.threat-badge.threat-low {
+  border-color: rgb(78 208 138 / 35%);
+  color: #a8f0d9;
+  background: rgb(78 208 138 / 8%);
+}
+
+.threat-badge.threat-medium {
+  border-color: rgb(241 200 76 / 35%);
+  color: #ffe8a8;
+  background: rgb(241 200 76 / 8%);
+}
+
+.threat-badge.threat-high {
+  border-color: rgb(255 77 79 / 35%);
+  color: #ffb4b6;
+  background: rgb(255 77 79 / 8%);
+  box-shadow: 0 0 12px rgb(255 77 79 / 15%);
+}
+
+.attackers-panel {
+  background: var(--panel-3);
+  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 4%);
+  padding: 0.6rem;
+  margin-top: 0.55rem;
+}
+
+.attackers-panel h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #dbe8ff;
+}
+
+.attackers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.attacker-card {
+  padding: 0.5rem 0.55rem;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 6%);
+  font-size: 0.73rem;
+}
+
+.attacker-ip {
+  font-weight: 600;
+  color: #caeeff;
+  margin-bottom: 0.2rem;
+  font-family: monospace;
+  font-size: 0.71rem;
+}
+
+.attacker-type {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.2rem;
+}
+
+.attacker-risk {
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  display: inline-block;
+  font-size: 0.68rem;
+}
+
+.attacker-risk.risk-low {
+  background: rgb(78 208 138 / 10%);
+  color: #a8f0d9;
+}
+
+.attacker-risk.risk-medium {
+  background: rgb(241 200 76 / 10%);
+  color: #ffe8a8;
+}
+
+.attacker-risk.risk-high {
+  background: rgb(255 77 79 / 10%);
+  color: #ffb4b6;
+}
+
+.attacker-meta {
+  color: var(--muted);
+  font-size: 0.66rem;
+  margin-top: 0.2rem;
+}
+
 .pulse {
   animation: markerPulse 2.3s infinite;
 }

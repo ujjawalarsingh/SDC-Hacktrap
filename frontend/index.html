@@ -17,8 +17,10 @@
           <div class="live-badge">
             <span class="live-dot"></span><span id="statusText">PAUSED</span>
           </div>
+          <div id="threatLevelBadge" class="threat-badge threat-low">
+            <span>Threat Level: LOW</span>
+          </div>
           <span class="status-chip active">AI Engine Active</span>
-          <span class="status-chip">Threat Level: Elevated</span>
           <span class="status-chip">Dark Web Monitoring Enabled</span>
           <div class="action-group">
             <button id="startBtn" class="primary" type="button">Start</button>
@@ -75,6 +77,11 @@
         <div class="ai-panel">
           <h3>AI Threat Engine</h3>
           <p id="insightText">Awaiting telemetry...</p>
+        </div>
+
+        <div class="attackers-panel">
+          <h3>Top Attackers</h3>
+          <div id="topAttackers" class="attackers-list"></div>
         </div>
       </section>
 
