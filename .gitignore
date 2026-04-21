@@ -17,3 +17,6 @@ app/geoip_cache.json
 app/dashboard.html
 dashboard.html
 *.tmp
+
+# Project documentation (local reference)
+PROJECT_DOCUMENTATION.md
