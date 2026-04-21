@@ -1,168 +1,188 @@
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { io } from 'socket.io-client';
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { io } from "socket.io-client";
 
-const API_BASE = 'http://localhost:3001';
-const FEED_LIMIT = 50;
+const API_BASE = "http://localhost:3001";
 const STATE_LIMIT = 200;
+const FEED_LIMIT = 12;
+const MAP_LIMIT = 28;
+const TABLE_LIMIT = 80;
+const RENDER_DEBOUNCE_MS = 180;
+const MAP_REFRESH_MS = 2500;
+const POLL_MS = 5000;
 
-const feedEl = document.getElementById('feed');
-const feedCountEl = document.getElementById('feedCount');
-const logsBodyEl = document.getElementById('logsBody');
-const searchInputEl = document.getElementById('searchInput');
-const sortBtnEl = document.getElementById('sortBtn');
-const total5mEl = document.getElementById('total5m');
-const topCountryEl = document.getElementById('topCountry');
-const topTypeEl = document.getElementById('topType');
-const confidenceBarsEl = document.getElementById('confidenceBars');
-const insightTextEl = document.getElementById('insightText');
-const lastUpdateEl = document.getElementById('lastUpdate');
+const elements = {
+  statusText: document.getElementById("statusText"),
+  startBtn: document.getElementById("startBtn"),
+  pauseBtn: document.getElementById("pauseBtn"),
+  resetBtn: document.getElementById("resetBtn"),
+  viewLogsBtn: document.getElementById("viewLogsBtn"),
+  feed: document.getElementById("feed"),
+  feedCount: document.getElementById("feedCount"),
+  logsBody: document.getElementById("logsBody"),
+  searchInput: document.getElementById("searchInput"),
+  sortBtn: document.getElementById("sortBtn"),
+  total5m: document.getElementById("total5m"),
+  topCountry: document.getElementById("topCountry"),
+  topType: document.getElementById("topType"),
+  confidenceBars: document.getElementById("confidenceBars"),
+  insightText: document.getElementById("insightText"),
+  lastUpdate: document.getElementById("lastUpdate"),
+  map: document.getElementById("map"),
+};
 
 const countryCoords = {
-  'United States': [39.8283, -98.5795],
+  "United States": [39.8283, -98.5795],
   Russia: [61.524, 105.3188],
   China: [35.8617, 104.1954],
   Germany: [51.1657, 10.4515],
   India: [20.5937, 78.9629],
   Brazil: [-14.235, -51.9253],
   Netherlands: [52.1326, 5.2913],
-  'United Kingdom': [55.3781, -3.436],
+  "United Kingdom": [55.3781, -3.436],
   Singapore: [1.3521, 103.8198],
   Japan: [36.2048, 138.2529],
   Canada: [56.1304, -106.3468],
   France: [46.2276, 2.2137],
 };
 
-let events = [];
-let eventIds = new Set();
-let sortDescending = true;
-let insightIndex = 0;
-let mapMarkers = [];
-
-const map = L.map('map', {
+const map = L.map(elements.map, {
   zoomControl: false,
   attributionControl: false,
-}).setView([25, 5], 2);
+  worldCopyJump: false,
+  scrollWheelZoom: false,
+  doubleClickZoom: false,
+  boxZoom: false,
+  keyboard: false,
+  tap: false,
+}).setView([24, 5], 2);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 5,
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 4,
   minZoom: 2,
+  updateWhenIdle: true,
 }).addTo(map);
+
+const state = {
+  events: [],
+  ids: new Set(),
+  isRunning: false,
+  sortDescending: true,
+  recentInsightIndex: 0,
+  renderQueued: false,
+  mapQueued: false,
+  pollTimer: null,
+  statsTimer: null,
+  insightTimer: null,
+  mapTimer: null,
+  socket: null,
+  lastSeenTimestamp: null,
+  markers: [],
+  markerPool: [],
+  insightLines: ["System Ready - Click Start"],
+};
 
 function scoreFor(event) {
   return event.analysis?.risk_score ?? event.risk_score ?? 0;
 }
 
 function confidenceFor(event) {
-  return event.analysis?.confidence ?? 'Low';
+  return event.analysis?.confidence ?? "Low";
 }
 
 function labelFor(event) {
-  return event.analysis?.threat_label ?? event.attack_type ?? 'Unknown';
+  return event.analysis?.threat_label ?? event.attack_type ?? "Unknown";
 }
 
-function badgeClassByConfidence(confidence) {
-  if (confidence === 'High') return 'risk-high';
-  if (confidence === 'Medium') return 'risk-medium';
-  return 'risk-low';
+function levelClass(event) {
+  const confidence = confidenceFor(event);
+  if (confidence === "High") return "high";
+  if (confidence === "Medium") return "medium";
+  return "low";
 }
 
-function addEvent(nextEvent) {
-  if (!nextEvent?.id || eventIds.has(nextEvent.id)) {
-    return;
-  }
+function isoTime(event) {
+  return new Date(event.timestamp).toLocaleTimeString();
+}
 
-  events.push(nextEvent);
-  eventIds.add(nextEvent.id);
-
-  if (events.length > STATE_LIMIT) {
-    const removed = events.splice(0, events.length - STATE_LIMIT);
-    for (const oldEvent of removed) {
-      eventIds.delete(oldEvent.id);
-    }
+function trimState() {
+  if (state.events.length <= STATE_LIMIT) return;
+  const overflow = state.events.splice(0, state.events.length - STATE_LIMIT);
+  for (const oldEvent of overflow) {
+    state.ids.delete(oldEvent.id);
   }
+}
+
+function addEvent(event) {
+  if (!event?.id || state.ids.has(event.id)) return false;
+  state.events.push(event);
+  state.ids.add(event.id);
+  trimState();
+  state.lastSeenTimestamp = event.timestamp;
+  return true;
 }
 
 function addEvents(batch) {
+  let added = false;
   for (const event of batch) {
-    addEvent(event);
+    if (addEvent(event)) added = true;
   }
+  return added;
 }
 
-function renderFeed() {
-  const latest = [...events]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, FEED_LIMIT);
-
-  feedCountEl.textContent = `${latest.length} events`;
-
-  feedEl.innerHTML = latest
-    .map((event) => {
-      const confidence = confidenceFor(event);
-      return `
-        <article class="feed-item ${badgeClassByConfidence(confidence)}" data-id="${event.id}">
-          <div class="row top">
-            <strong>${event.ip}</strong>
-            <span class="score">${scoreFor(event)}</span>
-          </div>
-          <div class="row mid">
-            <span>${event.country || 'Unknown'}</span>
-            <span>${labelFor(event)}</span>
-          </div>
-        </article>
-      `;
-    })
-    .join('');
-
-  if (feedEl.firstElementChild) {
-    feedEl.firstElementChild.classList.add('new');
-    setTimeout(() => {
-      feedEl.firstElementChild?.classList.remove('new');
-    }, 1200);
+function clearState() {
+  state.events = [];
+  state.ids.clear();
+  state.lastSeenTimestamp = null;
+  state.recentInsightIndex = 0;
+  for (const marker of state.markers) {
+    marker.remove();
   }
-
-  feedEl.scrollTop = 0;
+  state.markerPool.push(...state.markers);
+  state.markers = [];
+  state.renderQueued = false;
+  state.mapQueued = false;
+  elements.feed.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-title">System Ready - Click Start</div>
+      <div class="empty-copy">Live telemetry is paused for presentation mode.</div>
+    </div>`;
+  elements.logsBody.innerHTML = "";
+  elements.feedCount.textContent = "0 events";
+  elements.total5m.textContent = "0";
+  elements.topCountry.textContent = "-";
+  elements.topType.textContent = "-";
+  elements.confidenceBars.innerHTML = "";
+  elements.insightText.textContent = "System Ready - Click Start";
+  elements.lastUpdate.textContent = "Paused";
+  state.insightLines = ["System Ready - Click Start"];
+  updateMap(true);
 }
 
-function renderMap() {
-  for (const marker of mapMarkers) {
-    map.removeLayer(marker);
-  }
-  mapMarkers = [];
+function activateRunningState(nextRunning) {
+  state.isRunning = nextRunning;
+  elements.statusText.textContent = nextRunning ? "RUNNING" : "PAUSED";
+  elements.startBtn.disabled = nextRunning;
+  elements.pauseBtn.disabled = !nextRunning;
+}
 
-  const latest = [...events]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 50);
-
-  for (const event of latest) {
-    const coords = countryCoords[event.country];
-    if (!coords) continue;
-
-    const marker = L.circleMarker(coords, {
-      radius: 7,
-      className: `pulse ${badgeClassByConfidence(confidenceFor(event))}`,
-      color: '#9ca3af',
-      fillOpacity: 0.85,
-      weight: 1,
-    })
-      .addTo(map)
-      .bindTooltip(`${event.ip} | ${labelFor(event)} | Risk ${scoreFor(event)}`);
-
-    mapMarkers.push(marker);
-  }
+function riskClass(score) {
+  if (score >= 85) return "high";
+  if (score >= 65) return "medium";
+  return "low";
 }
 
 function countBy(items, keyGetter) {
-  const map = new Map();
+  const counts = new Map();
   for (const item of items) {
-    const key = keyGetter(item) || 'Unknown';
-    map.set(key, (map.get(key) || 0) + 1);
+    const key = keyGetter(item) || "Unknown";
+    counts.set(key, (counts.get(key) || 0) + 1);
   }
-  return map;
+  return counts;
 }
 
 function topKey(countMap) {
-  let top = '-';
+  let top = "-";
   let max = -1;
   for (const [key, value] of countMap.entries()) {
     if (value > max) {
@@ -173,89 +193,208 @@ function topKey(countMap) {
   return top;
 }
 
-function renderStats() {
+function recentEvents() {
   const now = Date.now();
-  const fiveMin = events.filter((event) => now - new Date(event.timestamp).getTime() <= 300000);
-  const countryCounts = countBy(fiveMin, (event) => event.country);
-  const typeCounts = countBy(fiveMin, (event) => labelFor(event));
+  return state.events.filter(
+    (event) => now - new Date(event.timestamp).getTime() <= 300000,
+  );
+}
 
-  total5mEl.textContent = String(fiveMin.length);
-  topCountryEl.textContent = topKey(countryCounts);
-  topTypeEl.textContent = topKey(typeCounts);
-  lastUpdateEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+function updateStats() {
+  const fiveMinuteEvents = recentEvents();
+  const countryCounts = countBy(fiveMinuteEvents, (event) => event.country);
+  const threatCounts = countBy(fiveMinuteEvents, (event) => labelFor(event));
+  const confidenceCounts = countBy(fiveMinuteEvents, (event) =>
+    confidenceFor(event),
+  );
 
-  const confidenceCounts = countBy(fiveMin, (event) => confidenceFor(event));
-  const total = fiveMin.length || 1;
-  const levels = ['High', 'Medium', 'Low'];
+  elements.total5m.textContent = String(fiveMinuteEvents.length);
+  elements.topCountry.textContent = topKey(countryCounts);
+  elements.topType.textContent = topKey(threatCounts);
+  elements.lastUpdate.textContent = state.isRunning
+    ? `Updated ${new Date().toLocaleTimeString()}`
+    : "Paused";
 
-  confidenceBarsEl.innerHTML = levels
+  const total = fiveMinuteEvents.length || 1;
+  const levels = ["High", "Medium", "Low"];
+  elements.confidenceBars.innerHTML = levels
     .map((level) => {
       const value = confidenceCounts.get(level) || 0;
-      const width = Math.max(6, (value / total) * 100);
-      const cls = badgeClassByConfidence(level);
+      const width = Math.max(8, (value / total) * 100);
       return `
-      <div class="bar-row">
-        <span>${level}</span>
-        <div class="bar-track"><div class="bar-fill ${cls}" style="width:${width}%"></div></div>
-        <strong>${value}</strong>
-      </div>`;
+        <div class="bar-row ${level.toLowerCase()}">
+          <span>${level}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+          <strong>${value}</strong>
+        </div>`;
     })
-    .join('');
+    .join("");
+
+  const topCountries = [...countryCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([country, count]) => `${country} (${count})`);
+
+  state.insightLines = buildInsights(fiveMinuteEvents, topCountries);
 }
 
-function buildInsights() {
-  const latest = [...events]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 80);
+function buildInsights(fiveMinuteEvents, topCountries) {
+  if (fiveMinuteEvents.length === 0) {
+    return ["System Ready - Click Start"];
+  }
 
+  const highCount = fiveMinuteEvents.filter(
+    (event) => confidenceFor(event) === "High",
+  ).length;
+  const malwareCount = fiveMinuteEvents.filter(
+    (event) => labelFor(event) === "Malware Activity",
+  ).length;
+  const bruteCount = fiveMinuteEvents.filter(
+    (event) => labelFor(event) === "Brute Force",
+  ).length;
+  const reconCount = fiveMinuteEvents.filter(
+    (event) => labelFor(event) === "Reconnaissance",
+  ).length;
+
+  const lines = [];
+
+  if (highCount > 0) {
+    lines.push(`High risk activity active: ${highCount} events.`);
+  }
+
+  if (bruteCount >= malwareCount && bruteCount > 0) {
+    lines.push(
+      `Brute force activity detected from ${topKey(countBy(fiveMinuteEvents, (event) => event.country))}.`,
+    );
+  }
+
+  if (malwareCount > 0) {
+    lines.push(
+      `Malware patterns increasing: ${malwareCount} payload-style commands observed.`,
+    );
+  }
+
+  if (reconCount > 0) {
+    lines.push(
+      `Reconnaissance traffic remains active across ${reconCount} events.`,
+    );
+  }
+
+  if (topCountries.length > 0) {
+    lines.push(`Top sources: ${topCountries.join(", ")}.`);
+  }
+
+  lines.push("AI Engine Active. Threat Level: Elevated.");
+  return lines;
+}
+
+function renderFeed() {
+  const latest = [...state.events]
+    .sort(
+      (a, b) =>
+        scoreFor(b) - scoreFor(a) ||
+        new Date(b.timestamp) - new Date(a.timestamp),
+    )
+    .slice(0, FEED_LIMIT);
+
+  elements.feedCount.textContent = `${latest.length} events`;
   if (latest.length === 0) {
-    return ['Telemetry initializing. AI engine calibrating risk baselines.'];
+    elements.feed.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-title">System Ready - Click Start</div>
+        <div class="empty-copy">Live telemetry is paused for presentation mode.</div>
+      </div>`;
+    return;
   }
 
-  const high = latest.filter((event) => confidenceFor(event) === 'High');
-  const malware = latest.filter((event) => labelFor(event) === 'Malware Activity');
-  const bruteForce = latest.filter((event) => labelFor(event) === 'Brute Force');
-  const topCountry = topKey(countBy(latest, (event) => event.country));
-
-  const insights = [];
-
-  if (high.length > 0) {
-    insights.push(`High-severity cluster active: ${high.length} critical events in recent telemetry.`);
-  }
-
-  if (malware.length > bruteForce.length && malware.length > 0) {
-    insights.push('Malware patterns increasing. Payload retrieval behavior is rising.');
-  }
-
-  if (bruteForce.length > 0) {
-    insights.push(`Brute force pressure detected. ${bruteForce.length} coordinated login sequences observed.`);
-  }
-
-  if (topCountry !== '-') {
-    insights.push(`Primary threat origin currently appears to be ${topCountry}.`);
-  }
-
-  insights.push('AI engine remains active and continuously reprioritizing incident risk.');
-  return insights;
+  elements.feed.innerHTML = latest
+    .map((event) => {
+      const score = scoreFor(event);
+      const cls = riskClass(score);
+      const highlight = cls === "high" ? " glow" : "";
+      return `
+        <article class="feed-item ${cls}${highlight}">
+          <div class="row top">
+            <strong>${event.ip}</strong>
+            <span class="score ${cls}">${score}</span>
+          </div>
+          <div class="row mid">
+            <span>${event.country || "Unknown"}</span>
+            <span>${labelFor(event)}</span>
+          </div>
+        </article>`;
+    })
+    .join("");
 }
 
-function rotateInsight() {
-  const insights = buildInsights();
-  if (insightIndex >= insights.length) {
-    insightIndex = 0;
+function getMapMarker(event) {
+  let marker = state.markerPool.pop();
+  if (!marker) {
+    marker = L.circleMarker([0, 0], {
+      radius: 5,
+      weight: 1,
+      fillOpacity: 0.65,
+      opacity: 0.85,
+      interactive: true,
+    }).addTo(map);
   }
-  insightTextEl.textContent = insights[insightIndex];
-  insightIndex += 1;
+  return marker;
+}
+
+function updateMap(force = false) {
+  if (!state.isRunning && !force) return;
+
+  const latest = [...state.events]
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, MAP_LIMIT);
+
+  while (state.markers.length > latest.length) {
+    const marker = state.markers.pop();
+    marker.remove();
+    state.markerPool.push(marker);
+  }
+
+  latest.forEach((event, index) => {
+    const coords = countryCoords[event.country];
+    if (!coords) return;
+
+    let marker = state.markers[index];
+    if (!marker) {
+      marker = getMapMarker(event);
+      state.markers[index] = marker;
+    }
+
+    marker.setLatLng(coords);
+    marker.setStyle({
+      color:
+        event.analysis?.confidence === "High"
+          ? "#ff4d4f"
+          : event.analysis?.confidence === "Medium"
+            ? "#f5c542"
+            : "#22c55e",
+      fillColor:
+        event.analysis?.confidence === "High"
+          ? "#ff4d4f"
+          : event.analysis?.confidence === "Medium"
+            ? "#f5c542"
+            : "#22c55e",
+      radius: event.analysis?.confidence === "High" ? 8 : 6,
+    });
+    marker.bindTooltip(
+      `${event.ip} | ${labelFor(event)} | ${scoreFor(event)}`,
+      { direction: "top" },
+    );
+  });
 }
 
 function renderTable() {
-  const term = searchInputEl.value.trim().toLowerCase();
-  let tableData = [...events]
+  const query = elements.searchInput.value.trim().toLowerCase();
+  let rows = [...state.events]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 120);
+    .slice(0, TABLE_LIMIT);
 
-  if (term) {
-    tableData = tableData.filter((event) => {
+  if (query) {
+    rows = rows.filter((event) => {
       const blob = [
         event.timestamp,
         event.ip,
@@ -263,118 +402,167 @@ function renderTable() {
         event.command,
         labelFor(event),
       ]
-        .join(' ')
+        .join(" ")
         .toLowerCase();
-      return blob.includes(term);
+      return blob.includes(query);
     });
   }
 
-  tableData.sort((a, b) => {
+  rows.sort((a, b) => {
     const delta = scoreFor(a) - scoreFor(b);
-    return sortDescending ? -delta : delta;
+    return state.sortDescending ? -delta : delta;
   });
 
-  logsBodyEl.innerHTML = tableData
+  elements.logsBody.innerHTML = rows
     .map((event) => {
-      const confidence = confidenceFor(event);
+      const cls = riskClass(scoreFor(event));
       return `
-      <tr class="${badgeClassByConfidence(confidence)}">
-        <td>${new Date(event.timestamp).toLocaleTimeString()}</td>
-        <td>${event.ip}</td>
-        <td>${event.country || 'Unknown'}</td>
-        <td>${labelFor(event)}</td>
-        <td class="command">${event.command}</td>
-        <td>${scoreFor(event)}</td>
-      </tr>`;
+        <tr class="${cls}">
+          <td>${isoTime(event)}</td>
+          <td>${event.ip}</td>
+          <td>${event.country || "Unknown"}</td>
+          <td>${labelFor(event)}</td>
+          <td class="command">${event.command}</td>
+          <td>${scoreFor(event)}</td>
+        </tr>`;
     })
-    .join('');
+    .join("");
 }
 
-function renderAll() {
+function renderInsights() {
+  const lines =
+    state.insightLines.length > 0
+      ? state.insightLines
+      : ["System Ready - Click Start"];
+  const line = lines[state.recentInsightIndex % lines.length];
+  state.recentInsightIndex += 1;
+  elements.insightText.textContent = line;
+}
+
+function renderFrame() {
+  state.renderQueued = false;
   renderFeed();
-  renderMap();
-  renderStats();
   renderTable();
+  updateStats();
+  renderInsights();
 }
 
-async function loadInitialEvents() {
+function queueRender() {
+  if (state.renderQueued) return;
+  state.renderQueued = true;
+  setTimeout(renderFrame, RENDER_DEBOUNCE_MS);
+}
+
+function queueMapUpdate() {
+  if (state.mapQueued) return;
+  state.mapQueued = true;
+  setTimeout(() => {
+    state.mapQueued = false;
+    updateMap();
+  }, MAP_REFRESH_MS);
+}
+
+async function fetchSnapshot() {
   try {
     const res = await fetch(`${API_BASE}/api/events?limit=100`);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    if (!res.ok) return;
     const data = await res.json();
-    addEvents(Array.isArray(data.events) ? data.events : []);
+    addEvents(Array.isArray(data.events) ? data.events.slice().reverse() : []);
   } catch (_error) {
-    // Keep UI active even if initial fetch fails.
+    // keep quiet in demo mode
   }
-
-  renderAll();
 }
 
-function startSocket() {
-  const socket = io(API_BASE, {
-    transports: ['websocket', 'polling'],
-  });
-
-  socket.on('new_event', (event) => {
-    addEvent(event);
-    renderAll();
-  });
-
-  socket.on('connect_error', () => {
-    // Silent fallback to polling below.
-  });
-}
-
-let lastSince = null;
-async function pollSinceFallback() {
+async function syncSince() {
+  if (!state.isRunning) return;
   try {
-    const url = lastSince
-      ? `${API_BASE}/api/events?since=${encodeURIComponent(lastSince)}&limit=100`
+    const url = state.lastSeenTimestamp
+      ? `${API_BASE}/api/events?since=${encodeURIComponent(state.lastSeenTimestamp)}&limit=100`
       : `${API_BASE}/api/events?limit=20`;
-
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
-    const batch = Array.isArray(data.events) ? data.events : [];
-    addEvents(batch);
-
-    if (events.length > 0) {
-      const latestTs = [...events].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0].timestamp;
-      lastSince = latestTs;
+    if (addEvents(Array.isArray(data.events) ? data.events.reverse() : [])) {
+      queueRender();
+      queueMapUpdate();
     }
-
-    renderAll();
   } catch (_error) {
-    // Keep silent in fallback loop.
+    // ignore polling fallback errors
   }
 }
 
-sortBtnEl.addEventListener('click', () => {
-  sortDescending = !sortDescending;
-  sortBtnEl.textContent = `Sort by Risk: ${sortDescending ? 'Desc' : 'Asc'}`;
+function processIncoming(event) {
+  if (!state.isRunning) return;
+  if (addEvent(event)) {
+    queueRender();
+    queueMapUpdate();
+  }
+}
+
+function connectRealtime() {
+  state.socket = io(API_BASE, { transports: ["websocket", "polling"] });
+  state.socket.on("new_event", processIncoming);
+  state.socket.on("connect_error", () => {});
+}
+
+function startRunning() {
+  if (state.isRunning) return;
+  activateRunningState(true);
+  elements.insightText.textContent = "System Ready - Streaming live telemetry.";
+  elements.feed.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-title">Connecting Live Telemetry</div>
+      <div class="empty-copy">Syncing events and awaiting the next threat signal.</div>
+    </div>`;
+  elements.lastUpdate.textContent = "Syncing...";
+  queueRender();
+  queueMapUpdate();
+  fetchSnapshot().then(() => {
+    queueRender();
+    queueMapUpdate();
+  });
+  syncSince();
+}
+
+function pauseRunning() {
+  if (!state.isRunning) return;
+  activateRunningState(false);
+  elements.insightText.textContent = "Paused - connections remain open.";
+}
+
+function resetSystem() {
+  pauseRunning();
+  clearState();
+}
+
+elements.startBtn.addEventListener("click", startRunning);
+elements.pauseBtn.addEventListener("click", pauseRunning);
+elements.resetBtn.addEventListener("click", resetSystem);
+elements.viewLogsBtn.addEventListener("click", () => {
+  document
+    .querySelector(".bottom")
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+elements.searchInput.addEventListener("input", queueRender);
+elements.sortBtn.addEventListener("click", () => {
+  state.sortDescending = !state.sortDescending;
+  elements.sortBtn.textContent = `Sort by Risk: ${state.sortDescending ? "Desc" : "Asc"}`;
   renderTable();
 });
 
-searchInputEl.addEventListener('input', () => {
-  renderTable();
-});
+activateRunningState(false);
+clearState();
+connectRealtime();
 
-await loadInitialEvents();
-startSocket();
+queueRender();
 
-setInterval(() => {
-  renderStats();
+state.pollTimer = setInterval(syncSince, POLL_MS);
+state.statsTimer = setInterval(() => {
+  if (state.isRunning) updateStats();
 }, 3000);
-
-setInterval(() => {
-  rotateInsight();
-}, 4000);
-
-setInterval(() => {
-  pollSinceFallback();
-}, 5000);
-
-rotateInsight();
+state.insightTimer = setInterval(() => {
+  if (state.isRunning) renderInsights();
+}, 3500);
+state.mapTimer = setInterval(() => {
+  if (state.isRunning) updateMap();
+}, MAP_REFRESH_MS);

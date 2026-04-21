@@ -13,12 +13,17 @@
           <h1>HackTrap AI Threat Monitor</h1>
           <p class="subtitle">Real-Time Threat Intelligence System</p>
         </div>
-        <div class="status-wrap">
-          <div class="live-badge"><span class="live-dot"></span>LIVE</div>
-          <div class="status-grid">
-            <span class="tag">AI Engine Active</span>
-            <span class="tag warning">Threat Level: Elevated</span>
-            <span class="tag">Dark Web Monitoring Enabled</span>
+        <div class="header-controls">
+          <div class="live-badge">
+            <span class="live-dot"></span><span id="statusText">PAUSED</span>
+          </div>
+          <span class="status-chip active">AI Engine Active</span>
+          <span class="status-chip">Threat Level: Elevated</span>
+          <span class="status-chip">Dark Web Monitoring Enabled</span>
+          <div class="action-group">
+            <button id="startBtn" class="primary" type="button">Start</button>
+            <button id="pauseBtn" type="button" disabled>Pause</button>
+            <button id="resetBtn" class="danger" type="button">Reset</button>
           </div>
         </div>
       </header>
@@ -26,7 +31,10 @@
       <section class="left panel">
         <div class="section-head">
           <h2>Live Attack Feed</h2>
-          <span class="muted" id="feedCount">0 events</span>
+          <div class="action-group">
+            <span class="muted" id="feedCount">0 events</span>
+            <button id="viewLogsBtn" type="button">View All Logs</button>
+          </div>
         </div>
         <div id="feed" class="feed"></div>
       </section>
@@ -64,7 +72,7 @@
           <div id="confidenceBars" class="bars"></div>
         </div>
 
-        <div class="insights panel-sub">
+        <div class="ai-panel">
           <h3>AI Threat Engine</h3>
           <p id="insightText">Awaiting telemetry...</p>
         </div>
@@ -74,7 +82,11 @@
         <div class="section-head">
           <h2>Threat Logs</h2>
           <div class="controls">
-            <input id="searchInput" type="text" placeholder="Search IP, country, command, label" />
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Search IP, country, command, label"
+            />
             <button id="sortBtn" type="button">Sort by Risk: Desc</button>
           </div>
         </div>
