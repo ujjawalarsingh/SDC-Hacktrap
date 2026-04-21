@@ -1,10 +1,10 @@
-const eventsEl = document.getElementById('events');
+const eventsEl = document.getElementById("events");
 
 async function loadEvents() {
   const fallback = { events: [] };
 
   try {
-    const res = await fetch('http://localhost:3001/api/events');
+    const res = await fetch("http://localhost:3001/api/events");
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }

