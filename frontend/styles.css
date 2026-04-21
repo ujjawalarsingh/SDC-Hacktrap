@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7f7f8;
+  color: #1b1c1f;
+}
+
+.layout {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.subtitle {
+  margin-top: 0.5rem;
+  color: #5a5f6a;
+}
+
+.panel {
+  margin-top: 1.5rem;
+  background: #ffffff;
+  border: 1px solid #d9dde6;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+pre {
+  margin: 0;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
