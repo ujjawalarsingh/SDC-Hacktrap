@@ -106,9 +106,14 @@ function createEvent() {
   };
 }
 
-function startEventGenerator(eventsArray) {
+function startEventGenerator(eventsArray, onEvent) {
   function scheduleNext() {
-    eventsArray.push(createEvent());
+    const event = createEvent();
+    eventsArray.push(event);
+
+    if (typeof onEvent === 'function') {
+      onEvent(event);
+    }
 
     if (eventsArray.length > 500) {
       eventsArray.splice(0, eventsArray.length - 500);
