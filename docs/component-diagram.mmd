@@ -1,20 +1,20 @@
 flowchart LR
   %% HackTrap AI Threat Monitor - Component Diagram
 
-  subgraph Client[Frontend (Vite App)]
-    UI[index.html + styles.css\nScrollable dashboard layout]
-    State[main.js\nState + render pipeline]
-    Map[Leaflet map\nGlobal marker visualization]
-    SocketClient[Socket.IO client\nnew_event stream]
-    RestClient[Fetch client\nPolling + snapshots]
+  subgraph Client["Frontend (Vite App)"]
+    UI["index.html + styles.css<br/>Scrollable dashboard layout"]
+    State["main.js<br/>State + render pipeline"]
+    Map["Leaflet map<br/>Global marker visualization"]
+    SocketClient["Socket.IO client<br/>new_event stream"]
+    RestClient["Fetch client<br/>Polling + snapshots"]
   end
 
-  subgraph API[Backend (Node.js + Express + Socket.IO)]
-    Server[server.js\nHTTP + WebSocket orchestration]
-    Generator[generator.js\nSession-based synthetic event generation]
-    Analyzer[analyzer.js\nThreat + intent + stage + prediction]
-    Profiles[profiles.js\nIP attacker profile store]
-    Memory[(In-memory buffers\nEvents + profile state)]
+  subgraph API["Backend (Node.js + Express + Socket.IO)"]
+    Server["server.js<br/>HTTP + WebSocket orchestration"]
+    Generator["generator.js<br/>Session-based synthetic event generation"]
+    Analyzer["analyzer.js<br/>Threat + intent + stage + prediction"]
+    Profiles["profiles.js<br/>IP attacker profile store"]
+    Memory["In-memory buffers<br/>Events + profile state"]
   end
 
   UI --> State
